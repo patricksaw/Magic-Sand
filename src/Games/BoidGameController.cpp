@@ -306,15 +306,18 @@ void CBoidGameController::DrawFinalScoresOnFBO()
 	scoreFont.drawString(scorestr, sx, sy);
 }
 
-void CBoidGameController::drawMainWindow(float x, float y, float width, float height) 
+void CBoidGameController::drawMainWindow(float x, float y, float width, float height)
 {
-	fboVehicles.draw(x, y, width, height);
+	if (fboVehicles.isAllocated())
+		fboVehicles.draw(x, y, width, height);
 	gui->draw();
 }
 
 
 void CBoidGameController::drawProjectorWindow()
 {
+	if (!fboVehicles.isAllocated())
+		return;
 	eGameState sequence = GameSequence[CurrentGameSequence];
 	if (sequence == GAME_STATE_SHOWSPLASHSCREEN)
 	{
@@ -849,6 +852,12 @@ void CBoidGameController::UpdateGUI()
 bool CBoidGameController::isIdle()
 {
 	return(GameSequence[CurrentGameSequence] == GAME_STATE_IDLE);
+}
+
+void CBoidGameController::stopGame()
+{
+	if (!isIdle())
+		CurrentGameSequence = GameSequence.size() - 1;
 }
 
 void CBoidGameController::onButtonEvent(ofxDatGuiButtonEvent e) {

@@ -39,6 +39,7 @@ public:
     void performInThread(std::function<void(KinectGrabber&)> action);
     bool setup();
 	bool openKinect();
+	void closeKinect();
 	void setupFramefilter(int gradFieldresolution, float newMaxOffset, ofRectangle ROI, bool spatialFilter, bool followBigChange, int numAveragingSlots);
     void initiateBuffers(void); // Reinitialise buffers
     void resetBuffers(void);

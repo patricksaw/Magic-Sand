@@ -27,6 +27,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "SandSurfaceRenderer/SandSurfaceRenderer.h"
 #include "Games/MapGameController.h"
 #include "Games/BoidGameController.h"
+#include "Games/TreasureGameController.h"
+#include "Games/VolcanoOverlay.h"
 
 class ofApp : public ofBaseApp {
 
@@ -51,13 +53,18 @@ public:
 	void gotMessage(ofMessage msg);
 
 	std::shared_ptr<ofAppBaseWindow> projWindow;
-
-private:
 	std::shared_ptr<KinectProjector> kinectProjector;
 	SandSurfaceRenderer* sandSurfaceRenderer;
+
+private:
 	CMapGameController mapGameController;
 	CBoidGameController boidGameController;
+	CTreasureGameController treasureGameController;
+	CVolcanoOverlay volcanoOverlay;
 
-	// Main window ROI 
+	bool wasRunning = false;
+	KinectProjector::GameMode activeGameMode = KinectProjector::GAME_MODE_NONE;
+
+	// Main window ROI
 	ofRectangle mainWindowROI;
 };

@@ -39,7 +39,8 @@ public:
     ofxKinectProjectorToolkit(ofVec2f projRes, ofVec2f kinectRes);
     
     void calibrate(vector<ofVec3f> pairsKinect,
-                   vector<ofVec2f> pairsProjector);
+                   vector<ofVec2f> pairsProjector,
+                   bool verbose = true);
     
     ofVec2f getProjectedPoint(ofVec3f worldPoint);
     ofMatrix4x4 getProjectionMatrix();

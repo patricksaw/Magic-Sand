@@ -21,6 +21,10 @@ General Public License for more details.
 
 #include "KinectGrabber.h"
 #include "ofConstants.h"
+#include <algorithm>
+
+using std::min;
+using std::max;
 
 KinectGrabber::KinectGrabber()
 :newFrame(true),
@@ -30,9 +34,12 @@ kinectOpened(false)
 }
 
 KinectGrabber::~KinectGrabber(){
-    //    stop();
+    stop();
     waitForThread(true);
-    //	waitForThread(true);
+    if (kinectOpened) {
+        kinect.close();
+        kinectOpened = false;
+    }
 }
 
 /// Start the thread.
@@ -70,8 +77,30 @@ bool KinectGrabber::setup(){
 }
 
 bool KinectGrabber::openKinect() {
+	kinect.close();
+	ofSleepMillis(100);
+
 	kinectOpened = kinect.open();
+
+	if (!kinectOpened) {
+		ofLogWarning("KinectGrabber") << "openKinect(): first open attempt failed, retrying...";
+		kinect.close();
+		ofSleepMillis(1000);
+		kinectOpened = kinect.open();
+	}
+
+	if (!kinectOpened) {
+		ofLogError("KinectGrabber") << "openKinect(): could not open kinect after retry";
+	}
+
 	return kinectOpened;
+}
+
+void KinectGrabber::closeKinect() {
+	if (kinectOpened) {
+		kinect.close();
+		kinectOpened = false;
+	}
 }
 void KinectGrabber::setupFramefilter(int sgradFieldresolution, float newMaxOffset, ofRectangle ROI, bool sspatialFilter, bool sfollowBigChange, int snumAveragingSlots) {
     gradFieldresolution = sgradFieldresolution;
@@ -182,11 +211,17 @@ void KinectGrabber::threadedFunction() {
         }
         
     }
-    kinect.close();
-    delete[] averagingBuffer;
-    delete[] statBuffer;
-    delete[] validBuffer;
-    delete[] gradField;
+    if (kinectOpened) {
+        kinect.close();
+        kinectOpened = false;
+    }
+    if (bufferInitiated) {
+        delete[] averagingBuffer;
+        delete[] statBuffer;
+        delete[] validBuffer;
+        delete[] gradField;
+        bufferInitiated = false;
+    }
 }
 
 void KinectGrabber::performInThread(std::function<void(KinectGrabber&)> action) {

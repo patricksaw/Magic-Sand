@@ -62,6 +62,7 @@ class CBoidGameController
 		void setupGui();
 
 		bool isIdle();
+		void stopGame();
 
 	private:
 		

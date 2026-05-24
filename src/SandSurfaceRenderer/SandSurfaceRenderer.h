@@ -71,7 +71,8 @@ public:
     void update();
     void drawMainWindow(float x, float y, float width, float height);
     void drawProjectorWindow();
-    
+    void setGuiVisible(bool visible);
+
     // Gui and events functions
     void setupGui();
     void onButtonEvent(ofxDatGuiButtonEvent e);
@@ -83,6 +84,8 @@ public:
     void onSaveModalEvent(ofxModalEvent e);
     void exit(ofEventArgs& e);
    
+    bool saveSettings();
+
 private:
     // Private methods
     void setupMesh();
@@ -93,7 +96,6 @@ private:
     void updateColorListColor(int i, int j);
     void populateColorList();
     bool loadSettings();
-    bool saveSettings();
     
     // shared pointers
     std::shared_ptr<KinectProjector> kinectProjector;

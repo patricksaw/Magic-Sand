@@ -222,6 +222,8 @@ void CMapGameController::DrawScoreTexts()
 
 void CMapGameController::drawProjectorWindow()
 {
+	if (!fboProjWindow.isAllocated())
+		return;
 	if (ShowScore)
 	{
 		fboProjWindow.draw(0, 0);
@@ -713,6 +715,12 @@ void CMapGameController::DebugTestMe()
 bool CMapGameController::isIdle()
 {
 	return(GameSequence[CurrentGameSequence] == GAME_STATE_IDLE);
+}
+
+void CMapGameController::stopGame()
+{
+	if (!isIdle())
+		CurrentGameSequence = GameSequence.size() - 1;
 }
 
 

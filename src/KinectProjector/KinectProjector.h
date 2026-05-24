@@ -72,6 +72,8 @@ public:
 
 	// Try to start the application - assumes calibration has been done before
 	void startApplication();
+	void forceCloseKinect();
+	void saveCalibrationAndSettings();
 
 	// Setup & calibration functions
     void startFullCalibration();
@@ -94,6 +96,7 @@ public:
 
 	void onToggleEvent(ofxDatGuiToggleEvent e);
     void onSliderEvent(ofxDatGuiSliderEvent e);
+    void onDropdownEvent(ofxDatGuiDropdownEvent e);
     void onConfirmModalEvent(ofxModalEvent e);
     void onCalibModalEvent(ofxModalEvent e);
 
@@ -176,6 +179,19 @@ public:
 
 	bool getDumpDebugFiles();
 
+	enum GameMode {
+		GAME_MODE_NONE = 0,
+		GAME_MODE_MAP,
+		GAME_MODE_ANIMALS,
+		GAME_MODE_SEEK_MOTHER,
+		GAME_MODE_TREASURE,
+		GAME_MODE_TREASURE_FREEPLAY
+	};
+
+	GameMode getSelectedGameMode() { return selectedGameMode; }
+	int getSelectedGameDifficulty() { return selectedGameDifficulty; }
+	bool getVolcanoModeEnabled() { return volcanoModeEnabled; }
+
 	// Debug functions
 	void SaveFilteredDepthImage();
 	void SaveKinectColorImage();
@@ -245,7 +261,6 @@ private:
     void drawChessboard(int x, int y, int chessboardSize);
     void drawArrow(ofVec2f projectedPoint, ofVec2f v1);
 
-    void saveCalibrationAndSettings();
     bool loadSettings();
     bool saveSettings();
     
@@ -367,6 +382,11 @@ private:
 	ofxDatGui* StatusGUI;
 	std::string calibrationText;
 	
+	// Game mode selection (from GUI)
+	GameMode selectedGameMode = GAME_MODE_NONE;
+	int selectedGameDifficulty = 2;
+	bool volcanoModeEnabled = false;
+
 	// Debug functions
 	bool DumpDebugFiles;
 	std::string DebugFileOutDir;

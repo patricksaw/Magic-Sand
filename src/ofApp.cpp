@@ -58,6 +58,15 @@ void ofApp::setup() {
 	boidGameController.setKinectRes(kinectRes);
 	boidGameController.setKinectROI(kinectROI);
 
+	treasureGameController.setup(kinectProjector);
+	treasureGameController.setProjectorRes(projRes);
+	treasureGameController.setKinectRes(kinectRes);
+	treasureGameController.setKinectROI(kinectROI);
+
+	volcanoOverlay.setup(kinectProjector);
+	volcanoOverlay.setProjectorRes(projRes);
+	volcanoOverlay.setKinectRes(kinectRes);
+	volcanoOverlay.setKinectROI(kinectROI);
 }
 
 
@@ -65,17 +74,59 @@ void ofApp::update() {
     // Call kinectProjector->update() first during the update function()
 	kinectProjector->update();
    	sandSurfaceRenderer->update();
-    
+
+	bool isRunning = kinectProjector->GetApplicationState() == KinectProjector::APPLICATION_STATE_RUNNING;
+	sandSurfaceRenderer->setGuiVisible(isRunning);
+
+	auto mode = kinectProjector->getSelectedGameMode();
+	bool gameModeChanged = isRunning && (mode != activeGameMode);
+
+	if ((isRunning && !wasRunning) || gameModeChanged) {
+		mapGameController.stopGame();
+		boidGameController.stopGame();
+		treasureGameController.stopGame();
+
+		int diff = kinectProjector->getSelectedGameDifficulty();
+		bool debug = kinectProjector->getDumpDebugFiles();
+		if (mode == KinectProjector::GAME_MODE_MAP) {
+			mapGameController.setDebug(debug);
+			mapGameController.StartGame();
+		} else if (mode == KinectProjector::GAME_MODE_ANIMALS) {
+			boidGameController.setDebug(debug);
+			boidGameController.StartGame(diff);
+		} else if (mode == KinectProjector::GAME_MODE_SEEK_MOTHER) {
+			boidGameController.setDebug(debug);
+			boidGameController.StartSeekMotherGame();
+		} else if (mode == KinectProjector::GAME_MODE_TREASURE) {
+			treasureGameController.setDebug(debug);
+			treasureGameController.StartGame(diff);
+		} else if (mode == KinectProjector::GAME_MODE_TREASURE_FREEPLAY) {
+			treasureGameController.setDebug(debug);
+			treasureGameController.StartFreePlay();
+		}
+		activeGameMode = mode;
+	}
+	if (!isRunning) {
+		activeGameMode = KinectProjector::GAME_MODE_NONE;
+	}
+	wasRunning = isRunning;
+
     //if (kinectProjector->isROIUpdated())
 	if (kinectProjector->getKinectROI() != mapGameController.getKinectROI())
 	{
 		ofRectangle kinectROI = kinectProjector->getKinectROI();
 		mapGameController.setKinectROI(kinectROI);
 		boidGameController.setKinectROI(kinectROI);
+		treasureGameController.setKinectROI(kinectROI);
+		volcanoOverlay.setKinectROI(kinectROI);
 	}
+
+	volcanoOverlay.setEnabled(isRunning && kinectProjector->getVolcanoModeEnabled());
 
 	mapGameController.update();
 	boidGameController.update();
+	treasureGameController.update();
+	volcanoOverlay.update();
 }
 
 
@@ -90,18 +141,22 @@ void ofApp::draw()
 	{
 		sandSurfaceRenderer->drawMainWindow(x, y, w, h);//400, 20, 400, 300);
 		boidGameController.drawMainWindow(x, y, w, h);
+		treasureGameController.drawMainWindow(x, y, w, h);
 	}
 
 	kinectProjector->drawMainWindow(x, y, w, h);
 }
 
-void ofApp::drawProjWindow(ofEventArgs &args) 
+void ofApp::drawProjWindow(ofEventArgs &args)
 {
+	ofClear(0, 0, 0, 255);
 	if (kinectProjector->GetApplicationState() == KinectProjector::APPLICATION_STATE_RUNNING)
 	{
 		sandSurfaceRenderer->drawProjectorWindow();
 		mapGameController.drawProjectorWindow();
 		boidGameController.drawProjectorWindow();
+		treasureGameController.drawProjectorWindow();
+		volcanoOverlay.drawProjectorWindow();
 	}
 	kinectProjector->drawProjectorWindow();
 }
@@ -190,6 +245,15 @@ void ofApp::keyPressed(int key)
 		{
 			boidGameController.setDebug(kinectProjector->getDumpDebugFiles());
 			boidGameController.StartSeekMotherGame();
+		}
+	}
+	else if (key == 'h')
+	{
+		if (kinectProjector->GetApplicationState() == KinectProjector::APPLICATION_STATE_RUNNING &&
+			mapGameController.isIdle() && boidGameController.isIdle())
+		{
+			treasureGameController.setDebug(kinectProjector->getDumpDebugFiles());
+			treasureGameController.StartGame(2);
 		}
 	}
 	else if (key == 't')

@@ -20,6 +20,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ***********************************************************************/
 
 #include "vehicle.h"
+#include <algorithm>
+using std::min;
+using std::max;
 
 // Default value of static variable
 bool Vehicle::DrawFlipped = false;
@@ -511,9 +514,9 @@ void Fish::draw()
     ofPushMatrix();
     ofTranslate(projectorCoord);
 	if (DrawFlipped)
-		ofRotate(180+angle);
+		ofRotateDeg(180+angle);
 	else
-		ofRotate(angle);
+		ofRotateDeg(angle);
 
     // Compute tail angle
     float nv = 0.5;//velocity.lengthSquared()/10; // Tail movement amplitude
@@ -732,9 +735,9 @@ void Rabbit::draw()//, std::vector<ofVec2f> forces)
     ofPushMatrix();
     ofTranslate(projectorCoord);
 	if (DrawFlipped)
-		ofRotate(180 + angle);
+		ofRotateDeg(180 + angle);
 	else
-		ofRotate(angle);
+		ofRotateDeg(angle);
 
     // Rabbit scale
     float sc = 1;
@@ -1028,9 +1031,9 @@ void Shark::draw()
 	ofPushMatrix();
 	ofTranslate(projectorCoord);
 	if (DrawFlipped)
-		ofRotate(180 + angle);
+		ofRotateDeg(180 + angle);
 	else
-		ofRotate(angle);
+		ofRotateDeg(angle);
 
 	// Compute tail angle
 	float nv = 0.5;//velocity.lengthSquared()/10; // Tail movement amplitude

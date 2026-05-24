@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "KinectProjector.h"
 #include <sstream>
+#include <algorithm>
 
 using namespace ofxCSG;
 
@@ -104,6 +105,12 @@ void KinectProjector::setup(bool sdisplayGui)
     
     // Get projector and kinect width & height
     projRes = ofVec2f(projWindow->getWidth(), projWindow->getHeight());
+    ofLogVerbose("KinectProjector") << "setup(): projWindow logical size: " << projWindow->getWidth() << "x" << projWindow->getHeight();
+    auto* glfwWin = dynamic_cast<ofAppGLFWWindow*>(projWindow.get());
+    if (glfwWin) {
+        float scale = glfwWin->getPixelScreenCoordScale();
+        ofLogVerbose("KinectProjector") << "setup(): projector pixel scale: " << scale;
+    }
     kinectRes = kinectgrabber.getKinectSize();
 	kinectROI = ofRectangle(0, 0, kinectRes.x, kinectRes.y);
 	ofLogVerbose("KinectProjector") << "KinectProjector.setup(): kinectROI " << kinectROI;
@@ -154,6 +161,14 @@ void KinectProjector::exit(ofEventArgs& e)
 			ofLogVerbose("KinectProjector") << "exit(): Settings could not be saved ";
 		}
 	}
+	kinectgrabber.stop();
+	kinectgrabber.waitForThread(true);
+}
+
+void KinectProjector::forceCloseKinect() {
+	kinectgrabber.stop();
+	kinectgrabber.waitForThread(true);
+	kinectgrabber.closeKinect();
 }
 
 void KinectProjector::setupGradientField(){
@@ -195,6 +210,11 @@ void KinectProjector::updateStatusGUI()
 		StatusGUI->getLabel("ROI Status")->setLabel("ROI defined");
 		StatusGUI->getLabel("ROI Status")->setLabelColor(ofColor(0, 255, 0));
 	}
+	else if (ofFile("settings/kinectProjectorSettings.xml").exists())
+	{
+		StatusGUI->getLabel("ROI Status")->setLabel("ROI saved - click RUN!");
+		StatusGUI->getLabel("ROI Status")->setLabelColor(ofColor(255, 255, 0));
+	}
 	else
 	{
 		StatusGUI->getLabel("ROI Status")->setLabel("ROI not defined");
@@ -206,6 +226,11 @@ void KinectProjector::updateStatusGUI()
 		StatusGUI->getLabel("Baseplane Status")->setLabel("Baseplane found");
 		StatusGUI->getLabel("Baseplane Status")->setLabelColor(ofColor(0, 255, 0));
 	}
+	else if (ofFile("settings/kinectProjectorSettings.xml").exists())
+	{
+		StatusGUI->getLabel("Baseplane Status")->setLabel("Baseplane saved - click RUN!");
+		StatusGUI->getLabel("Baseplane Status")->setLabelColor(ofColor(255, 255, 0));
+	}
 	else
 	{
 		StatusGUI->getLabel("Baseplane Status")->setLabel("Baseplane not found");
@@ -216,6 +241,11 @@ void KinectProjector::updateStatusGUI()
 	{
 		StatusGUI->getLabel("Calibration Status")->setLabel("Projector/Kinect calibrated");
 		StatusGUI->getLabel("Calibration Status")->setLabelColor(ofColor(0, 255, 0));
+	}
+	else if (ofFile("settings/calibration.xml").exists())
+	{
+		StatusGUI->getLabel("Calibration Status")->setLabel("Calibration saved - click RUN!");
+		StatusGUI->getLabel("Calibration Status")->setLabelColor(ofColor(255, 255, 0));
 	}
 	else
 	{
@@ -365,46 +395,43 @@ void KinectProjector::update()
         }
     }
 
-	fboProjWindow.begin();
-
 	if (applicationState != APPLICATION_STATE_CALIBRATING)
 	{
+		fboProjWindow.begin();
 		ofClear(255, 255, 255, 0);
+		if (doShowROIonProjector && ROIcalibrated && kinectOpened)
+		{
+			ofNoFill();
+			ofSetLineWidth(4);
+
+			ofVec2f UL = kinectCoordToProjCoord(kinectROI.getMinX(), kinectROI.getMinY());
+			ofVec2f LR = kinectCoordToProjCoord(kinectROI.getMaxX()-1, kinectROI.getMaxY()-1);
+
+			ofSetColor(255, 0, 0);
+			ofRectangle tempRect(ofPoint(UL.x, UL.y), ofPoint(LR.x, LR.y));
+			ofDrawRectangle(tempRect);
+
+			ofSetColor(0, 0, 255);
+			ofRectangle tempRect2(ofPoint(UL.x - 2, UL.y - 2), ofPoint(UL.x + 2, UL.y + 2));
+			ofDrawRectangle(tempRect2);
+
+			UL = kinectCoordToProjCoord(kinectROI.getMinX(), kinectROI.getMinY(), basePlaneOffset.z);
+			LR = kinectCoordToProjCoord(kinectROI.getMaxX(), kinectROI.getMaxY(), basePlaneOffset.z);
+
+			ofSetColor(0, 255, 0);
+			tempRect = ofRectangle(ofPoint(UL.x, UL.y), ofPoint(LR.x, LR.y));
+			ofDrawRectangle(tempRect);
+
+			ofSetColor(255, 0, 255);
+			tempRect2 = ofRectangle(ofPoint(UL.x - 2, UL.y - 2), ofPoint(UL.x + 2, UL.y + 2));
+			ofDrawRectangle(tempRect2);
+		}
+		else if (applicationState == APPLICATION_STATE_SETUP)
+		{
+			ofBackground(255);
+		}
+		fboProjWindow.end();
 	}
-	if (doShowROIonProjector && ROIcalibrated && kinectOpened)
-	{
-		ofNoFill();
-		ofSetLineWidth(4);
-
-		// Draw rectangle of ROI using the offset by the current sand level
-		ofVec2f UL = kinectCoordToProjCoord(kinectROI.getMinX(), kinectROI.getMinY());
-		ofVec2f LR = kinectCoordToProjCoord(kinectROI.getMaxX()-1, kinectROI.getMaxY()-1);
-
-		ofSetColor(255, 0, 0);
-		ofRectangle tempRect(ofPoint(UL.x, UL.y), ofPoint(LR.x, LR.y));
-		ofDrawRectangle(tempRect);		
-
-		ofSetColor(0, 0, 255);
-		ofRectangle tempRect2(ofPoint(UL.x - 2, UL.y - 2), ofPoint(UL.x + 2, UL.y + 2));
-		ofDrawRectangle(tempRect2);
-
-		// Draw rectangle of ROI using the offset by the waterlevel
-		UL = kinectCoordToProjCoord(kinectROI.getMinX(), kinectROI.getMinY(), basePlaneOffset.z);
-		LR = kinectCoordToProjCoord(kinectROI.getMaxX(), kinectROI.getMaxY(), basePlaneOffset.z);
-
-		ofSetColor(0, 255, 0);
-		tempRect = ofRectangle(ofPoint(UL.x, UL.y), ofPoint(LR.x, LR.y));
-		ofDrawRectangle(tempRect);
-
-		ofSetColor(255, 0, 255);
-		tempRect2 = ofRectangle(ofPoint(UL.x - 2, UL.y - 2), ofPoint(UL.x + 2, UL.y + 2));
-		ofDrawRectangle(tempRect2);
-	}
-	else if (applicationState == APPLICATION_STATE_SETUP)
-	{
-		ofBackground(255); // Set to white in setup mode
-	}
-	fboProjWindow.end();
 }
 
 void KinectProjector::mousePressed(int x, int y, int button)
@@ -530,11 +557,11 @@ void KinectProjector::updateROIFromCalibration()
 	ofVec2f b = worldCoordTokinectCoord(projCoordAndWorldZToWorldCoord(projRes.x, 0, basePlaneOffset.z));
 	ofVec2f c = worldCoordTokinectCoord(projCoordAndWorldZToWorldCoord(projRes.x, projRes.y, basePlaneOffset.z));
 	ofVec2f d = worldCoordTokinectCoord(projCoordAndWorldZToWorldCoord(0, projRes.y, basePlaneOffset.z));
-	float x1 = max(a.x, d.x);
-	float x2 = min(b.x, c.x);
-	float y1 = max(a.y, b.y);
-	float y2 = min(c.y, d.y);
-	ofRectangle smallKinectROI = ofRectangle(ofPoint(max(x1, kinectROI.getLeft()), max(y1, kinectROI.getTop())), ofPoint(min(x2, kinectROI.getRight()), min(y2, kinectROI.getBottom())));
+	float x1 = std::max(a.x, d.x);
+	float x2 = std::min(b.x, c.x);
+	float y1 = std::max(a.y, b.y);
+	float y2 = std::min(c.y, d.y);
+	ofRectangle smallKinectROI = ofRectangle(ofPoint(std::max(x1, kinectROI.getLeft()), std::max(y1, kinectROI.getTop())), ofPoint(std::min(x2, kinectROI.getRight()), std::min(y2, kinectROI.getBottom())));
 	kinectROI = smallKinectROI;
 
 	kinectROI.standardize();
@@ -557,7 +584,10 @@ void KinectProjector::updateROIFromColorImage()
         while (threshold < 255){
             kinectColorImage.setROI(0, 0, kinectRes.x, kinectRes.y);
             thresholdedImage = kinectColorImage;
-            cvThreshold(thresholdedImage.getCvImage(), thresholdedImage.getCvImage(), threshold, 255, CV_THRESH_BINARY_INV);
+            {
+            cv::Mat matImg = cv::cvarrToMat(thresholdedImage.getCvImage());
+            cv::threshold(matImg, matImg, threshold, 255, cv::THRESH_BINARY_INV);
+        }
             contourFinder.findContours(thresholdedImage, 12, kinectRes.x*kinectRes.y, 5, true);
             ofPolyline small = ofPolyline();
             for (int i = 0; i < contourFinder.nBlobs; i++) {
@@ -611,7 +641,10 @@ void KinectProjector::updateROIFromDepthImage(){
     } else if (ROICalibState == ROI_CALIBRATION_STATE_MOVE_UP) {
 	ofLogVerbose("KinectProjector") << "updateROIFromDepthImage(): ROI_CALIBRATION_STATE_MOVE_UP";
 		while (threshold < 255){
-            cvThreshold(thresholdedImage.getCvImage(), thresholdedImage.getCvImage(), 255-threshold, 255, CV_THRESH_TOZERO_INV);
+            {
+                cv::Mat matImg = cv::cvarrToMat(thresholdedImage.getCvImage());
+                cv::threshold(matImg, matImg, 255-threshold, 255, cv::THRESH_TOZERO_INV);
+            }
             thresholdedImage.updateTexture();
 //			SaveDepthDebugImageNative(thresholdedImage, counter++);
             contourFinder.findContours(thresholdedImage, 12, kinectRes.x*kinectRes.y, 5, true, false);
@@ -672,8 +705,7 @@ void KinectProjector::updateROIFromFile()
 	ofXml xml;
 	if (xml.load(settingsFile))
 	{
-		xml.setTo("KINECTSETTINGS");
-		kinectROI = xml.getValue<ofRectangle>("kinectROI");
+		kinectROI = xml.getChild("KINECTSETTINGS").getChild("kinectROI").getValue<ofRectangle>();
 		setNewKinectROI();
 		ROICalibState = ROI_CALIBRATION_STATE_DONE;
 		return;
@@ -737,7 +769,7 @@ std::string KinectProjector::GetTimeAndDateString()
 bool KinectProjector::savePointPair()
 {
 	std::string ppK = ofToDataPath(DebugFileOutDir + "CalibrationPointPairsKinect.txt");
-	std::string ppP = ofToDataPath(DebugFileOutDir + "CalibrationPointPairsKinect.txt");
+	std::string ppP = ofToDataPath(DebugFileOutDir + "CalibrationPointPairsProjector.txt");
 	std::ofstream ppKo(ppK);
 	std::ofstream ppPo(ppP);
 
@@ -804,6 +836,8 @@ void KinectProjector::updateProjKinectAutoCalibration()
         upframe = false;
         trials = 0;
 		TemporalFrameCounter = 0;
+		pairsKinect.clear();
+		pairsProjector.clear();
 
 		ofPoint dispPt = ofPoint(projRes.x / 2, projRes.y / 2) + autoCalibPts[currentCalibPts]; //
 		drawChessboard(dispPt.x, dispPt.y, chessboardSize); // We can now draw the next chess board
@@ -837,6 +871,111 @@ void KinectProjector::updateProjKinectAutoCalibration()
 		else 
 		{
             ofLogVerbose("KinectProjector") << "autoCalib(): Calibrating" ;
+
+            // Filter out positions with bogus depth (e.g. ~0mm instead of ~760mm)
+            {
+                int cornersPerPos = (chessboardX - 1) * (chessboardY - 1);
+                int nPositions = pairsKinect.size() / cornersPerPos;
+                float expectedZ = basePlaneOffset.z;
+
+                std::vector<ofVec3f> cleanK;
+                std::vector<ofVec2f> cleanP;
+                int nRemoved = 0;
+
+                for (int p = 0; p < nPositions; p++) {
+                    double avgZ = 0;
+                    for (int i = 0; i < cornersPerPos; i++)
+                        avgZ += pairsKinect[p * cornersPerPos + i].z;
+                    avgZ /= cornersPerPos;
+
+                    ofLogVerbose("KinectProjector") << "autoCalib(): pos " << p
+                        << " avgZ=" << avgZ << " expectedZ=" << expectedZ;
+
+                    if (fabs(avgZ - expectedZ) > 300) {
+                        ofLogVerbose("KinectProjector") << "autoCalib(): EXCLUDING position " << p
+                            << " - depth too far from base plane (" << avgZ << " vs " << expectedZ << ")";
+                        nRemoved++;
+                    } else {
+                        for (int i = 0; i < cornersPerPos; i++) {
+                            int idx = p * cornersPerPos + i;
+                            cleanK.push_back(pairsKinect[idx]);
+                            cleanP.push_back(pairsProjector[idx]);
+                        }
+                    }
+                }
+                if (nRemoved > 0) {
+                    ofLogVerbose("KinectProjector") << "autoCalib(): Removed " << nRemoved
+                        << " positions with bad depth, " << (nPositions - nRemoved) << " remain";
+                    pairsKinect = cleanK;
+                    pairsProjector = cleanP;
+                }
+            }
+
+            // Fix OpenCV's 180-degree corner ordering ambiguity: try all flip combos
+            {
+                int cornersPerPos = (chessboardX - 1) * (chessboardY - 1);
+                int nPos = pairsKinect.size() / cornersPerPos;
+
+                if (nPos >= 2 && nPos <= 14) {
+                    auto origK = pairsKinect;
+                    int totalCombos = 1 << nPos;
+                    double bestErr = 1e30;
+                    int bestMask = 0;
+
+                    ofLogVerbose("KinectProjector") << "autoCalib(): Brute-force ordering search: "
+                        << totalCombos << " combinations for " << nPos << " positions";
+
+                    for (int mask = 0; mask < totalCombos; mask++) {
+                        pairsKinect = origK;
+                        for (int p = 0; p < nPos; p++) {
+                            if (mask & (1 << p)) {
+                                for (int i = 0; i < cornersPerPos / 2; i++) {
+                                    int a = p * cornersPerPos + i;
+                                    int b = p * cornersPerPos + (cornersPerPos - 1 - i);
+                                    std::swap(pairsKinect[a], pairsKinect[b]);
+                                }
+                            }
+                        }
+
+                        kpt->calibrate(pairsKinect, pairsProjector, false);
+                        ofMatrix4x4 trialMatrix = kpt->getProjectionMatrix();
+
+                        double totalErr = 0;
+                        for (int i = 0; i < (int)pairsKinect.size(); i++) {
+                            ofVec4f wc(pairsKinect[i].x, pairsKinect[i].y, pairsKinect[i].z, 1);
+                            ofVec4f sp = trialMatrix * wc;
+                            if (fabs(sp.z) < 1e-12) continue;
+                            double dx = sp.x / sp.z - pairsProjector[i].x;
+                            double dy = sp.y / sp.z - pairsProjector[i].y;
+                            totalErr += sqrt(dx * dx + dy * dy);
+                        }
+                        totalErr /= pairsKinect.size();
+
+                        if (totalErr < bestErr) {
+                            bestErr = totalErr;
+                            bestMask = mask;
+                        }
+                    }
+
+                    pairsKinect = origK;
+                    int nFlipped = 0;
+                    for (int p = 0; p < nPos; p++) {
+                        if (bestMask & (1 << p)) {
+                            for (int i = 0; i < cornersPerPos / 2; i++) {
+                                int a = p * cornersPerPos + i;
+                                int b = p * cornersPerPos + (cornersPerPos - 1 - i);
+                                std::swap(pairsKinect[a], pairsKinect[b]);
+                            }
+                            nFlipped++;
+                        }
+                    }
+
+                    ofLogVerbose("KinectProjector") << "autoCalib(): Best ordering mask=" << bestMask
+                        << " flipped " << nFlipped << "/" << nPos
+                        << " positions, bestErr=" << bestErr;
+                }
+            }
+
             kpt->calibrate(pairsKinect, pairsProjector);
             kinectProjMatrix = kpt->getProjectionMatrix();
 
@@ -889,6 +1028,9 @@ double KinectProjector::ComputeReprojectionError(bool WriteFile)
 	std::string oErrors = ofToDataPath(DebugFileOutDir + "CalibrationReprojectionErrors_" + GetTimeAndDateString() + ".txt");
 
 	double PError = 0;
+	double maxErr = 0;
+	int maxErrIdx = 0;
+	int cornersPerPos = (chessboardX - 1) * (chessboardY - 1);
 
 	for (int i = 0; i < pairsKinect.size(); i++)
 	{
@@ -902,8 +1044,19 @@ double KinectProjector::ComputeReprojectionError(bool WriteFile)
 		double D = sqrt((projectedPoint.x - projP.x) * (projectedPoint.x - projP.x) + (projectedPoint.y - projP.y) * (projectedPoint.y - projP.y));
 
 		PError += D;
+		if (D > maxErr) { maxErr = D; maxErrIdx = i; }
+
+		if (i % cornersPerPos == 0) {
+			ofLogVerbose("KinectProjector") << "ComputeReprojectionError: position " << (i / cornersPerPos)
+				<< " denom=" << screenPos.z;
+		}
 	}
 	PError /= (double)pairsKinect.size();
+
+	ofLogVerbose("KinectProjector") << "ComputeReprojectionError: avgErr=" << PError
+		<< " maxErr=" << maxErr << " at pair " << maxErrIdx
+		<< " (position " << (maxErrIdx / cornersPerPos) << ")"
+		<< " nPairs=" << pairsKinect.size();
 
 	if (WriteFile)
 	{
@@ -943,15 +1096,20 @@ void KinectProjector::CalibrateNextPoint()
 			updateStatusGUI();
 		}
 
-		// Current RGB frame - probably with rolling shutter problems
 		cvRgbImage = ofxCv::toCv(kinectColorImage.getPixels());
 
+		// Use raw frame, not temporal filter (which ghosts previous chessboard positions)
 		ofxCvGrayscaleImage tempImage;
-		if (TemporalFilteringType == 0)
-			tempImage.setFromPixels(TemporalFrameFilter.getMedianFilteredImage(), kinectColorImage.width, kinectColorImage.height);
-		if (TemporalFilteringType == 1)
-			tempImage.setFromPixels(TemporalFrameFilter.getAverageFilteredColImage(), kinectColorImage.width, kinectColorImage.height);
-		
+		{
+			int w = kinectColorImage.width;
+			int h = kinectColorImage.height;
+			unsigned char* colorData = kinectColorImage.getPixels().getData();
+			std::vector<unsigned char> grayBuf(w * h);
+			for (int i = 0; i < w * h; i++)
+				grayBuf[i] = (unsigned char)((colorData[3*i] + colorData[3*i+1] + colorData[3*i+2]) / 3);
+			tempImage.setFromPixels(grayBuf.data(), w, h);
+		}
+
 		ProcessChessBoardInput(tempImage);
 
 		if (DumpDebugFiles)
@@ -988,7 +1146,7 @@ void KinectProjector::CalibrateNextPoint()
 			}
 
 			cornerSubPix(cvGrayImage, cvPoints, cv::Size(2, 2), cv::Size(-1, -1),   // Rasmus: changed search size to 2 from 11 - since this caused false findings
-				cv::TermCriteria(CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 30, 0.1));
+				cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, 0.1));
 
 			drawChessboardCorners(cvRgbImage, patternSize, cv::Mat(cvPoints), foundChessboard);
 
@@ -1010,8 +1168,11 @@ void KinectProjector::CalibrateNextPoint()
 			{
 				trials = 0;
 				currentCalibPts++;
-				ofPoint dispPt = ofPoint(projRes.x / 2, projRes.y / 2) + autoCalibPts[currentCalibPts]; // Compute next chessboard position
-				drawChessboard(dispPt.x, dispPt.y, chessboardSize); // We can now draw the next chess board
+				int maxPts = upframe ? 10 : 5;
+				if (currentCalibPts < maxPts) {
+					ofPoint dispPt = ofPoint(projRes.x / 2, projRes.y / 2) + autoCalibPts[currentCalibPts];
+					drawChessboard(dispPt.x, dispPt.y, chessboardSize);
+				}
 			}
 			else
 			{
@@ -1075,9 +1236,9 @@ void KinectProjector::updateProjKinectManualCalibration(){
     bool foundChessboard = findChessboardCorners(cvRgbImage, patternSize, cvPoints, chessFlags);
     if(foundChessboard) {
         cv::Mat gray;
-        cvtColor(cvRgbImage, gray, CV_RGB2GRAY);
+        cvtColor(cvRgbImage, gray, cv::COLOR_RGB2GRAY);
         cornerSubPix(gray, cvPoints, cv::Size(11, 11), cv::Size(-1, -1),
-                     cv::TermCriteria(CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 30, 0.1));
+                     cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, 0.1));
         drawChessboardCorners(cvRgbImage, patternSize, cv::Mat(cvPoints), foundChessboard);
     }
 }
@@ -1162,16 +1323,24 @@ bool KinectProjector::addPointPair() {
     bool okchess = true;
     string resultMessage;
     ofLogVerbose("KinectProjector") << "addPointPair(): Adding point pair in kinect world coordinates" ;
+    ofLogVerbose("KinectProjector") << "addPointPair(): projRes=" << projRes.x << "x" << projRes.y
+        << " projWindow=" << projWindow->getWidth() << "x" << projWindow->getHeight()
+        << " fbo=" << fboProjWindow.getWidth() << "x" << fboProjWindow.getHeight();
+    float maxValidDepth = 3500;
     int nDepthPoints = 0;
     for (int i=0; i<cvPoints.size(); i++) {
         ofVec3f worldPoint = kinectCoordToWorldCoord(cvPoints[i].x, cvPoints[i].y);
-        if (worldPoint.z > 0)   nDepthPoints++;
+        if (worldPoint.z > 0 && worldPoint.z < maxValidDepth) nDepthPoints++;
     }
     if (nDepthPoints == (chessboardX-1)*(chessboardY-1)) {
         for (int i=0; i<cvPoints.size(); i++) {
             ofVec3f worldPoint = kinectCoordToWorldCoord(cvPoints[i].x, cvPoints[i].y);
             pairsKinect.push_back(worldPoint);
             pairsProjector.push_back(currentProjectorPoints[i]);
+            ofLogVerbose("KinectProjector") << "addPointPair(): pair " << i
+                << ": cvPx=(" << cvPoints[i].x << "," << cvPoints[i].y
+                << ") kinW=(" << worldPoint.x << "," << worldPoint.y << "," << worldPoint.z
+                << ") proj=(" << currentProjectorPoints[i].x << "," << currentProjectorPoints[i].y << ")";
         }
         resultMessage = "addPointPair(): Added " + ofToString((chessboardX-1)*(chessboardY-1)) + " points pairs.";
 		if (DumpDebugFiles)
@@ -1179,7 +1348,13 @@ bool KinectProjector::addPointPair() {
 			savePointPair();
 		}
     } else {
-        resultMessage = "addPointPair(): Points not added because not all chessboard\npoints' depth known. Try re-positionining.";
+        resultMessage = "addPointPair(): Points not added because not all chessboard\npoints' depth known (" + ofToString(nDepthPoints) + "/" + ofToString((chessboardX-1)*(chessboardY-1)) + " valid). Try re-positionining.";
+        for (int i=0; i<cvPoints.size(); i++) {
+            ofVec3f wp = kinectCoordToWorldCoord(cvPoints[i].x, cvPoints[i].y);
+            if (wp.z <= 0 || wp.z >= maxValidDepth) {
+                ofLogVerbose("KinectProjector") << "addPointPair(): invalid depth at cvPoint(" << cvPoints[i].x << "," << cvPoints[i].y << ") z=" << wp.z;
+            }
+        }
         okchess = false;
     }
     ofLogVerbose("KinectProjector") << resultMessage ;
@@ -1196,7 +1371,7 @@ void KinectProjector::askToFlattenSand(){
 }
 
 void KinectProjector::drawProjectorWindow(){
-    fboProjWindow.draw(0,0);
+    fboProjWindow.draw(0, 0, projWindow->getWidth(), projWindow->getHeight());
 }
 
 void KinectProjector::drawMainWindow(float x, float y, float width, float height){
@@ -1219,20 +1394,21 @@ void KinectProjector::drawMainWindow(float x, float y, float width, float height
 }
 
 void KinectProjector::drawChessboard(int x, int y, int chessboardSize) {
+    ofLogVerbose("KinectProjector") << "drawChessboard(): center=(" << x << "," << y
+        << ") size=" << chessboardSize << " projRes=" << projRes.x << "x" << projRes.y;
     fboProjWindow.begin();
+    ofClear(255, 255, 255, 255);
     ofFill();
-    // Draw the calibration chess board on the projector window
     float w = chessboardSize / chessboardX;
     float h = chessboardSize / chessboardY;
-    
-    float xf = x-chessboardSize/2; // x and y are chess board center size
+
+    float xf = x-chessboardSize/2;
     float yf = y-chessboardSize/2;
-    
+
     currentProjectorPoints.clear();
-    
-	ofClear(255, 255, 255, 0);
-	ofBackground(255); 
-	ofSetColor(0);
+
+    ofPushMatrix();
+    ofSetColor(0);
     ofTranslate(xf, yf);
     for (int j=0; j<chessboardY; j++) {
         for (int i=0; i<chessboardX; i++) {
@@ -1244,6 +1420,7 @@ void KinectProjector::drawChessboard(int x, int y, int chessboardSize) {
             if ((i+j)%2==0) ofDrawRectangle(x0, y0, w, h);
         }
     }
+    ofPopMatrix();
     ofSetColor(255);
     fboProjWindow.end();
 }
@@ -1278,7 +1455,7 @@ void KinectProjector::drawArrow(ofVec2f projectedPoint, ofVec2f v1)
     ofFill();
     ofPushMatrix();
     ofTranslate(projectedPoint);
-    ofRotate(angle);
+    ofRotateDeg(angle);
     ofSetColor(255,0,0,255);
     ofDrawLine(0, 0, length, 0);
     ofDrawLine(length, 0, length-7, 5);
@@ -1425,6 +1602,14 @@ void KinectProjector::setupGui(){
 	calibrationFolder->addButton("Auto Adjust ROI");
 	calibrationFolder->addToggle("Show ROI on sand", doShowROIonProjector);
 
+	gui->addBreak();
+	vector<string> gameModes = {"None", "Map Game", "Animal Game", "Seek Mother", "Treasure Hunt", "Treasure Free Play"};
+	gui->addDropdown("Game Mode", gameModes)->setName("Game Mode");
+	auto diffSlider = gui->addSlider("Difficulty", 1, 4, 3);
+	diffSlider->setPrecision(0);
+	diffSlider->setName("Game Difficulty");
+	gui->addToggle("Volcano Mode", false);
+
 	//	advancedFolder->addButton("Draw ROI")->setName("Draw ROI");
  //   advancedFolder->addButton("Calibrate")->setName("Full Calibration");
 //	advancedFolder->addButton("Update ROI from calibration");
@@ -1440,6 +1625,7 @@ void KinectProjector::setupGui(){
     gui->onButtonEvent(this, &KinectProjector::onButtonEvent);
     gui->onToggleEvent(this, &KinectProjector::onToggleEvent);
     gui->onSliderEvent(this, &KinectProjector::onSliderEvent);
+    gui->onDropdownEvent(this, &KinectProjector::onDropdownEvent);
 
 	// disactivate autodraw
 	gui->setAutoDraw(false);
@@ -1506,6 +1692,7 @@ void KinectProjector::startApplication()
 			setNewKinectROI();
 			ROIcalibrated = true;
 			basePlaneComputed = true;
+			basePlaneUpdated = true;
 			setFullFrameFiltering(doFullFrameFiltering);
 			setInPainting(doInpainting);
 			setFollowBigChanges(followBigChanges);
@@ -1514,6 +1701,9 @@ void KinectProjector::startApplication()
 			int nAvg = numAveragingSlots;
 			kinectgrabber.performInThread([nAvg](KinectGrabber & kg) {
 				kg.setAveragingSlotsNumber(nAvg); });
+
+			kinectgrabber.performInThread([this](KinectGrabber & kg) {
+				kg.setMaxOffset(this->maxOffset); });
 
 			updateStatusGUI();
 		}
@@ -1740,6 +1930,10 @@ void KinectProjector::onToggleEvent(ofxDatGuiToggleEvent e){
 	{
 		showROIonProjector(e.checked);
 	}
+	else if (e.target->is("Volcano Mode"))
+	{
+		volcanoModeEnabled = e.checked;
+	}
 }
 
 void KinectProjector::onSliderEvent(ofxDatGuiSliderEvent e){
@@ -1763,6 +1957,14 @@ void KinectProjector::onSliderEvent(ofxDatGuiSliderEvent e){
         kinectgrabber.performInThread([e](KinectGrabber & kg) {
             kg.setAveragingSlotsNumber(e.value);
         });
+    } else if(e.target->is("Game Difficulty")){
+        selectedGameDifficulty = (int)e.value - 1;
+    }
+}
+
+void KinectProjector::onDropdownEvent(ofxDatGuiDropdownEvent e){
+    if (e.target->is("Game Mode")){
+        selectedGameMode = (GameMode)e.child;
     }
 }
 
@@ -1801,6 +2003,9 @@ void KinectProjector::onConfirmModalEvent(ofxModalEvent e)
                 if (!upframe)
 				{
                     upframe = true;
+                    ofPoint dispPt = ofPoint(projRes.x / 2, projRes.y / 2) + autoCalibPts[currentCalibPts];
+                    drawChessboard(dispPt.x, dispPt.y, chessboardSize);
+                    TemporalFrameCounter = 0;
                 }
             }
         }
@@ -1852,24 +2057,30 @@ void KinectProjector::saveCalibrationAndSettings()
 
 bool KinectProjector::loadSettings(){
     string settingsFile = "settings/kinectProjectorSettings.xml";
-    
+
     ofXml xml;
     if (!xml.load(settingsFile))
         return false;
-    xml.setTo("KINECTSETTINGS");
-    kinectROI = xml.getValue<ofRectangle>("kinectROI");
-    basePlaneNormalBack = xml.getValue<ofVec3f>("basePlaneNormalBack");
+    auto settings = xml.getChild("KINECTSETTINGS");
+    ofRectangle loadedROI = settings.getChild("kinectROI").getValue<ofRectangle>();
+    if (loadedROI.width <= 0 || loadedROI.height <= 0)
+    {
+        ofLogWarning("KinectProjector") << "loadSettings(): Invalid ROI in settings (width=" << loadedROI.width << " height=" << loadedROI.height << ") - run calibration";
+        return false;
+    }
+    kinectROI = loadedROI;
+    basePlaneNormalBack = settings.getChild("basePlaneNormalBack").getValue<ofVec3f>();
     basePlaneNormal = basePlaneNormalBack;
-    basePlaneOffsetBack = xml.getValue<ofVec3f>("basePlaneOffsetBack");
+    basePlaneOffsetBack = settings.getChild("basePlaneOffsetBack").getValue<ofVec3f>();
     basePlaneOffset = basePlaneOffsetBack;
-    basePlaneEq = xml.getValue<ofVec4f>("basePlaneEq");
-    maxOffsetBack = xml.getValue<float>("maxOffsetBack");
+    basePlaneEq = settings.getChild("basePlaneEq").getValue<ofVec4f>();
+    maxOffsetBack = settings.getChild("maxOffsetBack").getValue<float>();
     maxOffset = maxOffsetBack;
-    spatialFiltering = xml.getValue<bool>("spatialFiltering");
-    followBigChanges = xml.getValue<bool>("followBigChanges");
-    numAveragingSlots = xml.getValue<int>("numAveragingSlots");
-	doInpainting = xml.getValue<bool>("OutlierInpainting", false);
-	doFullFrameFiltering = xml.getValue<bool>("FullFrameFiltering", false);
+    spatialFiltering = settings.getChild("spatialFiltering").getValue<bool>();
+    followBigChanges = settings.getChild("followBigChanges").getValue<bool>();
+    numAveragingSlots = settings.getChild("numAveragingSlots").getValue<int>();
+	doInpainting = settings.getChild("OutlierInpainting") ? settings.getChild("OutlierInpainting").getValue<bool>() : false;
+	doFullFrameFiltering = settings.getChild("FullFrameFiltering") ? settings.getChild("FullFrameFiltering").getValue<bool>() : false;
     return true;
 }
 
@@ -1878,19 +2089,17 @@ bool KinectProjector::saveSettings()
     string settingsFile = "settings/kinectProjectorSettings.xml";
 
     ofXml xml;
-    xml.addChild("KINECTSETTINGS");
-    xml.setTo("KINECTSETTINGS");
-    xml.addValue("kinectROI", kinectROI);
-    xml.addValue("basePlaneNormalBack", basePlaneNormalBack);
-    xml.addValue("basePlaneOffsetBack", basePlaneOffsetBack);
-    xml.addValue("basePlaneEq", basePlaneEq);
-    xml.addValue("maxOffsetBack", maxOffsetBack);
-    xml.addValue("spatialFiltering", spatialFiltering);
-    xml.addValue("followBigChanges", followBigChanges);
-    xml.addValue("numAveragingSlots", numAveragingSlots);
-	xml.addValue("OutlierInpainting", doInpainting);
-	xml.addValue("FullFrameFiltering", doFullFrameFiltering);
-	xml.setToParent();
+    auto root = xml.appendChild("KINECTSETTINGS");
+    root.appendChild("kinectROI").set(kinectROI);
+    root.appendChild("basePlaneNormalBack").set(basePlaneNormalBack);
+    root.appendChild("basePlaneOffsetBack").set(basePlaneOffsetBack);
+    root.appendChild("basePlaneEq").set(basePlaneEq);
+    root.appendChild("maxOffsetBack").set(maxOffsetBack);
+    root.appendChild("spatialFiltering").set(spatialFiltering);
+    root.appendChild("followBigChanges").set(followBigChanges);
+    root.appendChild("numAveragingSlots").set(numAveragingSlots);
+    root.appendChild("OutlierInpainting").set(doInpainting);
+    root.appendChild("FullFrameFiltering").set(doFullFrameFiltering);
     return xml.save(settingsFile);
 }
 

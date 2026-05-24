@@ -61,7 +61,8 @@ class CMapGameController
 		void DebugTestMe();
 				
 		bool isIdle();
-		
+		void stopGame();
+
 		void setProjectorRes(ofVec2f& PR);
 
 		void setKinectRes(ofVec2f& KR);
